@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Studio Vidéo Immo 3D</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0a0c14;--bg2:#12151f;--card:#1a1e2e;--card2:#232840;--line:#2a3045;--txt:#eef1f8;--muted:#7c85a0;--accent:#5b8cff;--accent2:#00e0b0;--gold:#e8b755;--danger:#ff5577}
+html,body{height:100%;overflow-x:hidden;font-family:-apple-system,system-ui,sans-serif;background:var(--bg);color:var(--txt);-webkit-font-smoothing:antialiased}
+header{position:sticky;top:0;z-index:50;background:rgba(10,12,20,.9);backdrop-filter:blur(20px);border-bottom:1px solid var(--line);padding:12px 16px;padding-top:calc(12px + env(safe-area-inset-top))}
+.logo{font-size:16px;font-weight:800;display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.logo-icon{width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:13px}
+.tabs{display:flex;gap:6px;background:var(--bg2);border-radius:12px;padding:4px}
+.tabs button{flex:1;padding:9px 6px;background:transparent;border:none;color:var(--muted);font-size:11px;font-weight:700;border-radius:9px;cursor:pointer;font-family:inherit;transition:.15s}
+.tabs button.active{background:var(--card2);color:var(--txt)}
+main{padding:16px;max-width:900px;margin:0 auto;padding-bottom:80px}
+.tab-panel{display:none}.tab-panel.active{display:block}
+button{font-family:inherit;cursor:pointer}
+.btn{padding:11px 18px;border:none;border-radius:12px;font-size:13px;font-weight:700;background:var(--card2);color:var(--txt)}
+.btn-primary{background:linear-gradient(135deg,var(--accent),#4a7cff);color:#fff}
+.btn-ghost{background:transparent;border:1px solid var(--line);color:var(--muted)}
+.btn-small{padding:7px 11px;font-size:11px;border-radius:8px}
+.btn-block{width:100%}
+.api-bar{display:flex;gap:6px;align-items:center;padding:10px;background:var(--card);border-radius:12px;margin-bottom:14px}
+.api-bar input{flex:1;padding:8px 12px;border-radius:8px;background:var(--bg2);border:1px solid var(--line);color:var(--txt);font-size:11px;font-family:monospace;min-width:0}
+.api-bar .status{font-size:11px;color:var(--accent2);font-weight:600}
+.title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:10px}
+.upload-zone{background:var(--card);border:2px dashed var(--line);border-radius:14px;padding:28px 16px;text-align:center;cursor:pointer;margin-bottom:14px}
+.upload-zone .icon{font-size:44px;margin-bottom:8px}
+.upload-zone h3{font-size:14px;margin-bottom:4px}
+.upload-zone p{font-size:11px;color:var(--muted)}
+/* Galerie multi-images */
+.img-gallery{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:14px}
+.img-item{position:relative;border-radius:8px;overflow:hidden;background:var(--card2);aspect-ratio:1}
+.img-item img{width:100%;height:100%;object-fit:cover;display:block}
+.img-item .rm{position:absolute;top:4px;right:4px;width:20px;height:20px;border-radius:50%;background:rgba(0,0,0,.7);color:#fff;border:none;font-size:10px;padding:0;display:flex;align-items:center;justify-content:center}
+.img-item .idx{position:absolute;bottom:4px;left:4px;background:rgba(0,0,0,.7);color:#fff;font-size:9px;font-weight:700;padding:2px 5px;border-radius:4px}
+.moves{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:14px}
+.move{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 4px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;transition:.15s}
+.move.active{border-color:var(--accent);background:rgba(91,140,255,.1)}
+.move .ico{font-size:18px}.move .lbl{font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase}
+.move.active .lbl{color:var(--accent)}
+.ambs{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:14px}
+.amb{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 3px;font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;cursor:pointer;transition:.15s}
+.amb.active{border-color:var(--gold);color:var(--gold);background:rgba(232,183,85,.1)}
+.slider{display:flex;justify-content:space-between;margin-bottom:5px}
+.slider label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase}
+.slider .val{font-size:11px;font-weight:800;color:var(--accent)}
+input[type=range]{width:100%;margin-bottom:14px;-webkit-appearance:none;height:5px;background:var(--bg2);border-radius:3px}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2))}
+.gen-btn{width:100%;padding:16px;border:none;border-radius:13px;background:linear-gradient(135deg,var(--accent),#4a7cff);color:#fff;font-size:15px;font-weight:800;box-shadow:0 6px 24px rgba(91,140,255,.4);display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:12px;transition:.15s}
+.gen-btn:disabled{background:var(--card2);color:var(--muted);box-shadow:none}
+.result{background:var(--card);border-radius:14px;overflow:hidden;margin-bottom:14px}
+.result video{width:100%;display:block}
+.rooms{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:14px}
+.room{background:var(--card);border-radius:11px;overflow:hidden;position:relative;cursor:pointer}
+.room img{width:100%;aspect-ratio:4/3;object-fit:cover;display:block}
+.room .nm{padding:7px 9px;font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.room .del{position:absolute;top:5px;right:5px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,.7);color:#fff;border:none;font-size:10px}
+.gallery{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.gi{background:var(--card);border-radius:11px;overflow:hidden}
+.gi video,.gi img{width:100%;aspect-ratio:16/9;object-fit:cover;display:block;background:#000}
+.gi .body{padding:7px 9px}
+.gi .t{font-size:10px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:3px}
+.gi .m{font-size:8px;color:var(--muted)}
+.gi .acts{display:flex;gap:3px;margin-top:5px}
+.gi .acts button{flex:1;padding:4px;border-radius:5px;font-size:9px;background:var(--bg2);color:var(--muted);border:none}
+.empty{text-align:center;padding:40px 16px;color:var(--muted)}
+.empty .ico{font-size:44px;opacity:.4;margin-bottom:10px}
+.empty p{font-size:12px;line-height:1.5}
+#viewer3d{position:fixed;inset:0;background:#000;z-index:100;display:none}
+#viewer3d.on{display:block}
+#viewer3d canvas{display:block;width:100%!important;height:100%!important}
+.vh{position:absolute;top:0;left:0;right:0;padding:16px;padding-top:calc(16px + env(safe-area-inset-top));z-index:10;display:flex;justify-content:space-between;align-items:center;background:linear-gradient(to bottom,rgba(0,0,0,.8),transparent);pointer-events:none}
+.vh>*{pointer-events:auto}
+.rt{color:#fff;font-size:15px;font-weight:800;padding:7px 13px;background:rgba(0,0,0,.6);border-radius:18px;backdrop-filter:blur(10px)}
+.cb{width:38px;height:38px;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;border:none;font-size:16px;backdrop-filter:blur(10px)}
+.vhint{position:absolute;bottom:90px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,.75);font-size:11px;font-weight:600;background:rgba(0,0,0,.55);padding:7px 14px;border-radius:18px;backdrop-filter:blur(10px);pointer-events:none;white-space:nowrap}
+.vexit{position:absolute;bottom:20px;bottom:calc(20px + env(safe-area-inset-bottom));left:0;right:0;display:flex;justify-content:center;gap:6px;padding:0 16px;flex-wrap:wrap}
+.vexit button{background:rgba(0,0,0,.75);color:#fff;border:1px solid rgba(255,255,255,.2);padding:9px 14px;border-radius:18px;font-size:11px;font-weight:700;backdrop-filter:blur(10px)}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.85);backdrop-filter:blur(8px);z-index:200;display:none;align-items:center;justify-content:center;padding:20px}
+.modal.on{display:flex}
+.mc{background:var(--card);border-radius:15px;padding:20px;width:100%;max-width:380px;max-height:90vh;overflow-y:auto}
+.mc h2{font-size:17px;margin-bottom:14px}
+.fg{margin-bottom:11px}
+.fg label{display:block;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:5px}
+.fg input{width:100%;padding:10px 12px;border-radius:9px;background:var(--bg2);border:1px solid var(--line);color:var(--txt);font-size:13px;font-family:inherit}
+.busy{position:fixed;inset:0;background:rgba(5,7,14,.92);backdrop-filter:blur(10px);z-index:300;display:none;align-items:center;justify-content:center;padding:20px}
+.busy.on{display:flex}
+.bc{background:var(--card);border-radius:18px;padding:30px 22px;text-align:center;max-width:320px}
+.sp{width:52px;height:52px;border:4px solid var(--line);border-top-color:var(--accent);border-right-color:var(--accent2);border-radius:50%;animation:sp 1s linear infinite;margin:0 auto 14px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.bt{font-size:14px;font-weight:800;margin-bottom:5px}
+.bs{font-size:11px;color:var(--muted);line-height:1.5}
+.toast{position:fixed;bottom:24px;bottom:calc(24px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%) translateY(100px);background:var(--card);border:1px solid var(--line);border-radius:11px;padding:11px 18px;font-size:12px;font-weight:600;z-index:400;transition:.3s;opacity:0;max-width:90vw}
+.toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+.toast.ok{border-color:var(--accent2)}
+.toast.err{border-color:var(--danger)}
+</style>
+</head>
+<body>
+<header>
+<div class="logo"><div class="logo-icon">🎬</div>Studio Vidéo Immo</div>
+<div class="tabs">
+<button data-tab="create" class="active" onclick="switchTab('create')">🎬 Créer</button>
+<button data-tab="explore" onclick="switchTab('explore')">🚶 3D</button>
+<button data-tab="gallery" onclick="switchTab('gallery')">📁 Créations</button>
+</div>
+</header>
+<main>
+<section id="tab-create" class="tab-panel active">
+<div class="api-bar">
+<input type="password" id="apiKey" placeholder="Clé API Agnes">
+<button class="btn btn-ghost btn-small" onclick="saveApiKey()">✓</button>
+<span class="status" id="apiStatus"></span>
+</div>
+<div id="uploadArea">
+<div class="upload-zone" onclick="document.getElementById('fileInput').click()">
+<div class="icon">📸</div>
+<h3>Ajouter des photos</h3>
+<p>Une ou plusieurs images (keyframes)</p>
+</div>
+<input type="file" id="fileInput" accept="image/*" multiple style="display:none" onchange="handlePhotos(event)">
+</div>
+<div class="img-gallery" id="imgGallery"></div>
+<div class="title">🎥 Mouvement</div>
+<div class="moves" id="movesGrid"></div>
+<div class="title">✨ Ambiance</div>
+<div class="ambs" id="ambGrid"></div>
+<div class="slider"><label>Durée</label><span class="val" id="durVal">4s</span></div>
+<input type="range" id="duration" min="3" max="15" value="4" step="1" oninput="document.getElementById('durVal').textContent=this.value+'s'">
+<button class="gen-btn" id="genBtn" onclick="generateVideo()" disabled><span id="genIcon">🎬</span><span id="genText">Générer la visite</span></button>
+<div id="resultBox" style="display:none">
+<div class="title">✅ Vidéo générée</div>
+<div class="result"><video id="resultPlayer" controls playsinline></video></div>
+</div>
+</section>
+<section id="tab-explore" class="tab-panel">
+<div class="title">🏠 Tes pièces</div>
+<div class="rooms" id="roomsList"></div>
+<button class="btn btn-ghost btn-block" onclick="openAddRoom()" style="margin-bottom:14px">+ Ajouter une pièce</button>
+<button class="gen-btn" id="exploreBtn" onclick="enter3D()" disabled>🚶 Entrer en mode 3D</button>
+<div style="margin-top:16px;padding:14px;background:var(--card);border-radius:11px;font-size:11px;color:var(--muted);line-height:1.6">
+<strong style="color:var(--txt)">Mode 3D :</strong><br>
+• Glisse ton doigt pour regarder autour<br>
+• Touche une flèche en bas pour changer de pièce
+</div>
+</section>
+<section id="tab-gallery" class="tab-panel">
+<div class="title">🎬 Vidéos</div>
+<div class="gallery" id="videoGallery"></div>
+<div id="videoEmpty" class="empty"><div class="ico">🎬</div><p>Aucune vidéo générée.<br>Va dans « Créer » pour commencer.</p></div>
+<div class="title" style="margin-top:20px">🏠 Pièces 3D</div>
+<div class="gallery" id="roomGallery"></div>
+<div id="roomEmpty" class="empty"><div class="ico">🏠</div><p>Aucune pièce ajoutée.<br>Va dans « 3D » pour commencer.</p></div>
+</section>
+</main>
+<div id="viewer3d">
+<div class="vh"><div class="rt" id="viewerRoomName">Pièce</div><button class="cb" onclick="exit3D()">✕</button></div>
+<div class="vhint" id="viewerHint">Glisse pour regarder autour</div>
+<div class="vexit" id="viewerExits"></div>
+</div>
+<div class="modal" id="addRoomModal">
+<div class="mc">
+<h2>Ajouter une pièce</h2>
+<div class="fg"><label>Nom</label><input type="text" id="roomName" placeholder="Salon, Cuisine…"></div>
+<div class="fg"><label>Photo</label><input type="file" id="roomPhotoInput" accept="image/*" onchange="handleRoomPhoto(event)"></div>
+<div id="roomPhotoPreview" style="display:none;margin-bottom:11px">
+<img id="roomPhotoImg" style="width:100%;border-radius:8px;max-height:180px;object-fit:cover">
+</div>
+<button class="btn btn-primary btn-block" onclick="saveRoom()">Ajouter</button>
+</div>
+</div>
+<div class="busy" id="busy"><div class="bc"><div class="sp"></div><div class="bt" id="busyTitle">Génération…</div><div class="bs" id="busySub">Patientez</div></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+// Gestion robuste du localStorage
+const storage = {
+  get(key, def) {
+    try {
+      const val = localStorage.getItem(key);
+      return val ? JSON.parse(val) : def;
+    } catch (e) {
+      console.warn('Erreur lecture localStorage:', e);
+      return def;
+    }
+  },
+  set(key, val) {
+    try {
+      localStorage.setItem(key, JSON.stringify(val));
+      return true;
+    } catch (e) {
+      console.error('Erreur écriture localStorage:', e);
+      // Si le quota est dépassé, on tente de nettoyer les anciennes vidéos
+      if (e.name === 'QuotaExceededError') {
+        const videos = storage.get('sv_videos', []);
+        if (videos.length > 0) {
+          storage.set('sv_videos', videos.slice(0, 10)); // Garder les 10 plus récentes
+          try {
+            localStorage.setItem(key, JSON.stringify(val));
+            return true;
+          } catch (e2) {
+            return false;
+          }
+        }
+      }
+      return false;
+    }
+  }
+};
+
+const CONFIG = {
+  API_BASE: 'https://apihub.agnes-ai.com/v1',
+  POLL_BASE: 'https://apihub.agnes-ai.com/agnesapi',
+  MODEL: 'agnes-video-v2.0',
+  MAX_WAIT: 360000,
+  RETRY: { max: 3, delays: [2000, 5000, 12000] }
+};
+
+const MOVES = [
+  {id:'dolly_in',icon:'⬆️',label:'Avancée',prompt:'slow cinematic dolly-in push forward, smooth camera movement, parallax depth'},
+  {id:'dolly_out',icon:'⬇️',label:'Recul',prompt:'smooth dolly-out pull back, gradual reveal, cinematic wide shot'},
+  {id:'pan_right',icon:'➡️',label:'Droite',prompt:'slow horizontal pan to the right, cinematic reveal'},
+  {id:'pan_left',icon:'⬅️',label:'Gauche',prompt:'slow horizontal pan to the left'},
+  {id:'orbit',icon:'🔄',label:'Orbite',prompt:'subtle orbital camera rotation around the space, parallax reveal'},
+  {id:'float',icon:'🎈',label:'Flottement',prompt:'floating camera drift upward, dreamy smooth motion'}
+];
+
+const AMBS = [
+  {id:'luxe',label:'Luxe',prompt:'luxury real estate aesthetic, bright airy, elegant warm daylight'},
+  {id:'natural',label:'Naturel',prompt:'natural daylight, soft warm ambiance, realistic photography'},
+  {id:'cinema',label:'Cinéma',prompt:'cinematic color grading, shallow depth of field, filmic'},
+  {id:'evening',label:'Soirée',prompt:'golden hour ambiance, warm interior lights, cozy evening'}
+];
+
+const state = {
+  apiKey: '',
+  photos: [], // Tableau pour stocker les images
+  moveId: 'dolly_in',
+  ambId: 'luxe',
+  videos: [],
+  rooms: [],
+  currentRoomId: null,
+  busy: false,
+  pendingRoomPhoto: null,
+  viewer: null
+};
+
+const $ = id => document.getElementById(id);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const uid = () => 'x-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7);
+
+function toast(m, k = '') {
+  const t = $('toast');
+  t.textContent = m;
+  t.className = 'toast show ' + k;
+  clearTimeout(t._t);
+  t._t = setTimeout(() => t.className = 'toast ' + k, 3500);
+}
+
+function setBusy(on, t, s) {
+  state.busy = on;
+  $('busy').classList.toggle('on', on);
+  if (t) $('busyTitle').textContent = t;
+  if (s) $('busySub').textContent = s;
+}
+
+function switchTab(n) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
+  $('tab-' + n).classList.add('active');
+  document.querySelector(`.tabs button[data-tab="${n}"]`).classList.add('active');
+  if (n === 'gallery') renderGallery();
+  if (n === 'explore') renderRooms();
+}
+
+window.addEventListener('beforeunload', e => {
+  if (state.busy) { e.preventDefault(); e.returnValue = ''; }
+});
+
+async function wakeLock() {
+  try { if ('wakeLock' in navigator) await navigator.wakeLock.request('screen'); } catch (e) {}
+}
+
+function saveApiKey() {
+  const v = $('apiKey').value.trim();
+  if (!v) return toast('Clé vide', 'err');
+  state.apiKey = v;
+  storage.set('sv_apiKey', v);
+  $('apiStatus').textContent = '✓';
+  toast('Clé enregistrée', 'ok');
+  updateGenBtn();
+}
+
+class AgnesAPI {
+  constructor(k) { this.key = k; }
+  h() { return { 'Content-Type': 'application/json', 'Authorization': `Bearer ${this.key}` }; }
+  
+  async retry(u, o, l) {
+    let le;
+    for (let i = 0; i <= CONFIG.RETRY.max; i++) {
+      try {
+        const r = await fetch(u, o);
+        if ([429, 503].includes(r.status) && i < CONFIG.RETRY.max) {
+          await sleep(CONFIG.RETRY.delays[i] || 5000);
+          continue;
+        }
+        return r;
+      } catch (e) {
+        le = e;
+        if (i < CONFIG.RETRY.max) {
+          await sleep(CONFIG.RETRY.delays[i] || 5000);
+          continue;
+        }
+      }
+    }
+    throw le || new Error(l + ' failed');
+  }
+
+  // Convertit une durée en secondes en nombre de frames valide (8n+1, max 441)
+  secondsToFrames(seconds) {
+    const fps = 24;
+    let target = Math.round(seconds * fps);
+    if (target < 1) target = 1;
+    if (target > 441) target = 441;
+    // Trouver le n tel que 8n+1 soit le plus proche
+    let n = Math.round((target - 1) / 8);
+    n = Math.max(0, Math.min(55, n)); // 55*8+1 = 441
+    return n * 8 + 1;
+  }
+
+  async gen(images, prompt, duration) {
+    const numFrames = this.secondsToFrames(duration);
+    const body = {
+      model: CONFIG.MODEL,
+      prompt: prompt,
+      num_frames: numFrames,
+      frame_rate: 24
+    };
+
+    // Si on a plusieurs images, on utilise le mode keyframes
+    if (images.length > 1) {
+      body.extra_body = {
+        image: images,
+        mode: 'keyframes'
+      };
+    } else if (images.length === 1) {
+      body.image = images[0];
+    }
+
+    const r = await this.retry(
+      `${CONFIG.API_BASE}/videos`,
+      { method: 'POST', headers: this.h(), body: JSON.stringify(body) },
+      'create'
+    );
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const d = await r.json();
+    const tid = d.video_id || d.task_id || d.id;
+    if (!tid) {
+      const u = d.url || d.output?.url;
+      if (u) return u;
+      throw new Error('Réponse inattendue');
+    }
+    return this.poll(tid);
+  }
+
+  async poll(tid) {
+    const s = Date.now();
+    let dl = 6000;
+    while (Date.now() - s < CONFIG.MAX_WAIT) {
+      const r = await this.retry(`${CONFIG.POLL_BASE}?video_id=${tid}`, { headers: this.h() }, 'poll');
+      if (r.ok) {
+        const d = await r.json();
+        const st = (d.status || d.state || '').toLowerCase();
+        if (['succeeded', 'success', 'completed', 'done'].includes(st)) {
+          const u = d.output?.url || d.url || d.result?.url || d.data?.[0]?.url || d.metadata?.url;
+          if (u) return u;
+          throw new Error('URL absente');
+        }
+        if (['failed', 'error', 'cancelled'].includes(st)) {
+          throw new Error(d.error?.message || d.message || 'Échec');
+        }
+      }
+      await sleep(dl);
+      dl = Math.min(dl * 1.3, 15000);
+    }
+    throw new Error('Timeout');
+  }
+}
+
+function handlePhotos(e) {
+  const files = Array.from(e.target.files);
+  if (files.length === 0) return;
+  if (files.length + state.photos.length > 8) {
+    return toast('Maximum 8 photos', 'err');
+  }
+  files.forEach(f => {
+    if (!f.type.startsWith('image/')) return toast('Format non supporté', 'err');
+    if (f.size > 8 * 1024 * 1024) return toast('Image > 8 Mo', 'err');
+    const r = new FileReader();
+    r.onload = ev => {
+      state.photos.push(ev.target.result);
+      renderPhotoGallery();
+      updateGenBtn();
+    };
+    r.readAsDataURL(f);
+  });
+  e.target.value = ''; // Réinitialiser l'input
+}
+
+function renderPhotoGallery() {
+  const gal = $('imgGallery');
+  if (state.photos.length === 0) {
+    gal.innerHTML = '';
+    return;
+  }
+  gal.innerHTML = state.photos.map((p, i) => `
+    <div class="img-item">
+      <img src="${p}" alt="Photo ${i+1}">
+      <button class="rm" onclick="removePhoto(${i})">✕</button>
+      <div class="idx">${i+1}</div>
+    </div>
+  `).join('');
+}
+
+function removePhoto(i) {
+  state.photos.splice(i, 1);
+  renderPhotoGallery();
+  updateGenBtn();
+}
+
+function renderMoves() {
+  $('movesGrid').innerHTML = MOVES.map(m => `
+    <div class="move ${m.id === state.moveId ? 'active' : ''}" onclick="selectMove('${m.id}')">
+      <div class="ico">${m.icon}</div><div class="lbl">${m.label}</div>
+    </div>
+  `).join('');
+}
+function selectMove(id) { state.moveId = id; renderMoves(); }
+
+function renderAmbs() {
+  $('ambGrid').innerHTML = AMBS.map(a => `
+    <div class="amb ${a.id ===
