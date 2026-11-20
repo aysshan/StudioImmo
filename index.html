@@ -33,7 +33,6 @@ button{font-family:inherit;cursor:pointer}
 .upload-zone .icon{font-size:44px;margin-bottom:8px}
 .upload-zone h3{font-size:14px;margin-bottom:4px}
 .upload-zone p{font-size:11px;color:var(--muted)}
-/* Galerie multi-images */
 .img-gallery{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:14px}
 .img-item{position:relative;border-radius:8px;overflow:hidden;background:var(--card2);aspect-ratio:1}
 .img-item img{width:100%;height:100%;object-fit:cover;display:block}
@@ -122,7 +121,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;heigh
 <div class="upload-zone" onclick="document.getElementById('fileInput').click()">
 <div class="icon">📸</div>
 <h3>Ajouter des photos</h3>
-<p>Une ou plusieurs images (keyframes)</p>
+<p>Une ou plusieurs images (max 8)</p>
 </div>
 <input type="file" id="fileInput" accept="image/*" multiple style="display:none" onchange="handlePhotos(event)">
 </div>
@@ -179,14 +178,12 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;heigh
 <div class="toast" id="toast"></div>
 
 <script>
-// Gestion robuste du localStorage
 const storage = {
   get(key, def) {
     try {
       const val = localStorage.getItem(key);
       return val ? JSON.parse(val) : def;
     } catch (e) {
-      console.warn('Erreur lecture localStorage:', e);
       return def;
     }
   },
@@ -195,20 +192,6 @@ const storage = {
       localStorage.setItem(key, JSON.stringify(val));
       return true;
     } catch (e) {
-      console.error('Erreur écriture localStorage:', e);
-      // Si le quota est dépassé, on tente de nettoyer les anciennes vidéos
-      if (e.name === 'QuotaExceededError') {
-        const videos = storage.get('sv_videos', []);
-        if (videos.length > 0) {
-          storage.set('sv_videos', videos.slice(0, 10)); // Garder les 10 plus récentes
-          try {
-            localStorage.setItem(key, JSON.stringify(val));
-            return true;
-          } catch (e2) {
-            return false;
-          }
-        }
-      }
       return false;
     }
   }
@@ -239,12 +222,12 @@ const AMBS = [
 ];
 
 const state = {
-  apiKey: '',
-  photos: [], // Tableau pour stocker les images
+  apiKey: storage.get('sv_apiKey', ''),
+  photos: [],
   moveId: 'dolly_in',
   ambId: 'luxe',
-  videos: [],
-  rooms: [],
+  videos: storage.get('sv_videos', []),
+  rooms: storage.get('sv_rooms', []),
   currentRoomId: null,
   busy: false,
   pendingRoomPhoto: null,
@@ -322,15 +305,13 @@ class AgnesAPI {
     throw le || new Error(l + ' failed');
   }
 
-  // Convertit une durée en secondes en nombre de frames valide (8n+1, max 441)
   secondsToFrames(seconds) {
     const fps = 24;
     let target = Math.round(seconds * fps);
     if (target < 1) target = 1;
     if (target > 441) target = 441;
-    // Trouver le n tel que 8n+1 soit le plus proche
     let n = Math.round((target - 1) / 8);
-    n = Math.max(0, Math.min(55, n)); // 55*8+1 = 441
+    n = Math.max(0, Math.min(55, n));
     return n * 8 + 1;
   }
 
@@ -343,7 +324,6 @@ class AgnesAPI {
       frame_rate: 24
     };
 
-    // Si on a plusieurs images, on utilise le mode keyframes
     if (images.length > 1) {
       body.extra_body = {
         image: images,
@@ -410,7 +390,7 @@ function handlePhotos(e) {
     };
     r.readAsDataURL(f);
   });
-  e.target.value = ''; // Réinitialiser l'input
+  e.target.value = '';
 }
 
 function renderPhotoGallery() {
@@ -445,4 +425,348 @@ function selectMove(id) { state.moveId = id; renderMoves(); }
 
 function renderAmbs() {
   $('ambGrid').innerHTML = AMBS.map(a => `
-    <div class="amb ${a.id ===
+    <div class="amb ${a.id === state.ambId ? 'active' : ''}" onclick="selectAmb('${a.id}')">
+      ${a.label}
+    </div>
+  `).join('');
+}
+function selectAmb(id) { state.ambId = id; renderAmbs(); }
+
+function updateGenBtn() {
+  const ok = state.photos.length > 0 && state.apiKey && !state.busy;
+  $('genBtn').disabled = !ok;
+  if (state.busy) {
+    $('genText').textContent = 'Génération…';
+    $('genIcon').textContent = '⏳';
+  } else {
+    $('genText').textContent = 'Générer la visite';
+    $('genIcon').textContent = '🎬';
+  }
+}
+
+async function generateVideo() {
+  if (state.busy || state.photos.length === 0 || !state.apiKey) return;
+  
+  const mv = MOVES.find(m => m.id === state.moveId);
+  const ab = AMBS.find(a => a.id === state.ambId);
+  const dur = Number($('duration').value);
+  
+  const prompt = [
+    mv.prompt,
+    `Visual style: ${ab.prompt}.`,
+    'Photorealistic real estate property, no text, no people, no distortion, highly detailed.'
+  ].join(' ');
+
+  setBusy(true, '🎬 Génération…', `${mv.label} · ${dur}s · ${ab.label}`);
+  updateGenBtn();
+  wakeLock();
+
+  const entry = {
+    id: uid(),
+    moveLabel: mv.label,
+    moveIcon: mv.icon,
+    ambLabel: ab.label,
+    duration: dur,
+    status: 'processing',
+    url: null,
+    error: null,
+    createdAt: Date.now()
+  };
+  state.videos.unshift(entry);
+  saveVideos();
+  renderGallery();
+
+  try {
+    const api = new AgnesAPI(state.apiKey);
+    const url = await api.gen(state.photos, prompt, dur);
+    entry.status = 'done';
+    entry.url = url;
+    saveVideos();
+    renderGallery();
+    $('resultBox').style.display = 'block';
+    $('resultPlayer').src = url;
+    toast('✓ Vidéo générée', 'ok');
+  } catch (e) {
+    entry.status = 'error';
+    entry.error = e.message;
+    saveVideos();
+    renderGallery();
+    toast(e.message, 'err');
+  } finally {
+    setBusy(false);
+    updateGenBtn();
+  }
+}
+
+function saveVideos() {
+  state.videos = state.videos.filter(v => v.status !== 'processing').slice(0, 30);
+  storage.set('sv_videos', state.videos);
+}
+
+function renderGallery() {
+  const vids = state.videos.filter(v => v.status === 'done');
+  $('videoGallery').innerHTML = vids.map(v => `
+    <div class="gi">
+      <video src="${v.url}" controls playsinline preload="metadata"></video>
+      <div class="body">
+        <div class="t">${v.moveIcon} ${v.moveLabel} · ${v.duration}s</div>
+        <div class="m">${v.ambLabel}</div>
+        <div class="acts">
+          <button onclick="window.open('${v.url}','_blank')">⬇️</button>
+          <button onclick="deleteVideo('${v.id}')">🗑️</button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+  $('videoEmpty').style.display = vids.length === 0 ? 'block' : 'none';
+
+  $('roomGallery').innerHTML = state.rooms.map(r => `
+    <div class="gi">
+      <img src="${r.photo}">
+      <div class="body">
+        <div class="t">${esc(r.name)}</div>
+        <div class="m">${Object.values(r.exits || {}).filter(x => x).length} sortie(s)</div>
+      </div>
+    </div>
+  `).join('');
+  $('roomEmpty').style.display = state.rooms.length === 0 ? 'block' : 'none';
+}
+
+function deleteVideo(id) {
+  state.videos = state.videos.filter(x => x.id !== id);
+  storage.set('sv_videos', state.videos);
+  renderGallery();
+}
+
+function esc(s) {
+  return String(s || '').replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
+function renderRooms() {
+  if (state.rooms.length === 0) {
+    $('roomsList').innerHTML = `<div class="empty" style="grid-column:1/-1"><div class="ico">🏠</div><p>Ajoute ta première pièce.</p></div>`;
+    $('exploreBtn').disabled = true;
+    return;
+  }
+  $('roomsList').innerHTML = state.rooms.map(r => `
+    <div class="room" onclick="startRoom('${r.id}')">
+      <img src="${r.photo}">
+      <button class="del" onclick="event.stopPropagation();deleteRoom('${r.id}')">✕</button>
+      <div class="nm">${esc(r.name)}</div>
+    </div>
+  `).join('');
+  $('exploreBtn').disabled = false;
+}
+
+function openAddRoom() {
+  $('roomName').value = '';
+  $('roomPhotoInput').value = '';
+  $('roomPhotoPreview').style.display = 'none';
+  state.pendingRoomPhoto = null;
+  $('addRoomModal').classList.add('on');
+}
+
+function handleRoomPhoto(e) {
+  const f = e.target.files[0];
+  if (!f) return;
+  if (!f.type.startsWith('image/')) return toast('Format non supporté', 'err');
+  if (f.size > 8 * 1024 * 1024) return toast('Image > 8 Mo', 'err');
+  const r = new FileReader();
+  r.onload = ev => {
+    state.pendingRoomPhoto = ev.target.result;
+    $('roomPhotoImg').src = state.pendingRoomPhoto;
+    $('roomPhotoPreview').style.display = 'block';
+  };
+  r.readAsDataURL(f);
+}
+
+function saveRoom() {
+  const n = $('roomName').value.trim();
+  if (!n) return toast('Nom requis', 'err');
+  if (!state.pendingRoomPhoto) return toast('Photo requise', 'err');
+  const room = {
+    id: uid(),
+    name: n,
+    photo: state.pendingRoomPhoto,
+    exits: {},
+    createdAt: Date.now()
+  };
+  state.rooms.push(room);
+  storage.set('sv_rooms', state.rooms);
+  $('addRoomModal').classList.remove('on');
+  renderRooms();
+  toast('Pièce ajoutée ✓', 'ok');
+}
+
+function deleteRoom(id) {
+  if (!confirm('Supprimer ?')) return;
+  state.rooms = state.rooms.filter(r => r.id !== id);
+  state.rooms.forEach(r => {
+    Object.keys(r.exits || {}).forEach(k => {
+      if (r.exits[k] === id) r.exits[k] = null;
+    });
+  });
+  storage.set('sv_rooms', state.rooms);
+  renderRooms();
+  renderGallery();
+}
+
+function startRoom(id) {
+  state.currentRoomId = id;
+  enter3D();
+}
+
+function enter3D() {
+  if (state.rooms.length === 0) return toast("Ajoute une pièce", 'err');
+  if (!state.currentRoomId) state.currentRoomId = state.rooms[0].id;
+  $('viewer3d').classList.add('on');
+  initViewer(state.currentRoomId);
+}
+
+function exit3D() {
+  $('viewer3d').classList.remove('on');
+  if (state.viewer) {
+    state.viewer();
+    state.viewer = null;
+  }
+}
+
+function initViewer(rid) {
+  const room = state.rooms.find(r => r.id === rid);
+  if (!room) return exit3D();
+  
+  $('viewerRoomName').textContent = room.name;
+  const cont = $('viewer3d');
+  const old = cont.querySelector('canvas');
+  if (old) old.remove();
+
+  const scene = new THREE.Scene();
+  const cam = new THREE.PerspectiveCamera(80, innerWidth / innerHeight, 0.1, 1000);
+  cam.position.set(0, 0, 0);
+  
+  const ren = new THREE.WebGLRenderer({ antialias: true });
+  ren.setSize(innerWidth, innerHeight);
+  ren.setPixelRatio(Math.min(devicePixelRatio, 2));
+  cont.insertBefore(ren.domElement, cont.firstChild);
+
+  const loader = new THREE.TextureLoader();
+  loader.load(room.photo, tex => {
+    const geo = new THREE.CylinderGeometry(15, 15, 15, 64, 1, true);
+    const mat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide });
+    scene.add(new THREE.Mesh(geo, mat));
+  }, undefined, () => toast('Photo non chargée', 'err'));
+
+  let yaw = 0, pitch = 0;
+  function upd() {
+    const x = Math.sin(yaw) * Math.cos(pitch);
+    const y = Math.sin(pitch);
+    const z = -Math.cos(yaw) * Math.cos(pitch);
+    cam.lookAt(x, y, z);
+  }
+  upd();
+
+  let drag = false, lx = 0, ly = 0;
+  const cv = ren.domElement;
+  cv.style.touchAction = 'none';
+  
+  cv.addEventListener('pointerdown', e => {
+    drag = true;
+    lx = e.clientX;
+    ly = e.clientY;
+    $('viewerHint').style.display = 'none';
+  });
+  
+  cv.addEventListener('pointermove', e => {
+    if (!drag) return;
+    yaw -= (e.clientX - lx) * 0.005;
+    pitch -= (e.clientY - ly) * 0.005;
+    pitch = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, pitch));
+    lx = e.clientX;
+    ly = e.clientY;
+    upd();
+  });
+  
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach(t => {
+    cv.addEventListener(t, () => drag = false);
+  });
+
+  let anim;
+  function loop() {
+    anim = requestAnimationFrame(loop);
+    ren.render(scene, cam);
+  }
+  loop();
+
+  function resize() {
+    cam.aspect = innerWidth / innerHeight;
+    cam.updateProjectionMatrix();
+    ren.setSize(innerWidth, innerHeight);
+  }
+  window.addEventListener('resize', resize);
+
+  renderExits(room);
+
+  state.viewer = () => {
+    cancelAnimationFrame(anim);
+    window.removeEventListener('resize', resize);
+    ren.dispose();
+    const c = cont.querySelector('canvas');
+    if (c) c.remove();
+  };
+}
+
+function renderExits(room) {
+  const ex = room.exits || {};
+  const act = Object.entries(ex).filter(([k, v]) => v);
+  const others = state.rooms.filter(r => r.id !== room.id);
+  
+  if (others.length === 0) {
+    $('viewerExits').innerHTML = `<div style="color:rgba(255,255,255,.7);font-size:11px;text-align:center;padding:10px 14px;background:rgba(0,0,0,.6);border-radius:18px">Ajoute d'autres pièces pour te déplacer</div>`;
+    return;
+  }
+  
+  let html = '';
+  if (act.length === 0) {
+    html = others.slice(0, 4).map(r => `<button onclick="jumpTo('${room.id}','${r.id}')">➡️ ${esc(r.name)}</button>`).join('');
+  } else {
+    html = act.map(([dir, id]) => {
+      const r = state.rooms.find(x => x.id === id);
+      if (!r) return '';
+      const arr = { front: '⬆️', back: '⬇️', left: '⬅️', right: '➡️' }[dir] || '➡️';
+      return `<button onclick="jumpTo('${room.id}','${id}')">${arr} ${esc(r.name)}</button>`;
+    }).join('');
+  }
+  $('viewerExits').innerHTML = html;
+}
+
+function jumpTo(fromId, toId) {
+  const from = state.rooms.find(r => r.id === fromId);
+  if (!from) return;
+  if (!from.exits) from.exits = {};
+  const dirs = ['front', 'back', 'left', 'right'];
+  const free = dirs.find(d => !from.exits[d]);
+  if (free) from.exits[free] = toId;
+  storage.set('sv_rooms', state.rooms);
+  state.currentRoomId = toId;
+  exit3D();
+  enter3D();
+}
+
+function init() {
+  if (state.apiKey) {
+    $('apiKey').value = state.apiKey;
+    $('apiStatus').textContent = '✓';
+  }
+  renderMoves();
+  renderAmbs();
+  renderRooms();
+  renderGallery();
+  renderPhotoGallery();
+  updateGenBtn();
+}
+init();
+</script>
+</body>
+</html>
